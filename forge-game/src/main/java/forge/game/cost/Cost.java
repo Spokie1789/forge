@@ -74,6 +74,22 @@ public class Cost implements Serializable {
         return this.getCostMana() != null;
     }
 
+    public final boolean isFree() {
+        return isOnlyManaCost() && getTotalMana().isZero();
+    }
+
+    public final boolean isSelfSacrifice() {
+        for (CostPart p : getCostParts()) {
+            if (p instanceof CostSacrifice) {
+                CostSacrifice sac = (CostSacrifice)p;
+                if (sac.getType().equals("CARDNAME")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public final boolean hasSpecificCostType(Class<? extends CostPart> costType) {
         for (CostPart p : getCostParts()) {
             if (costType.isInstance(p)) {
