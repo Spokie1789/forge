@@ -135,7 +135,8 @@ public class TrackableTypes {
     public static final TrackableType<String> StringType = new TrackableType<String>("");
 
     //make this quicker than having to define a new class for every single enum
-    private static Map<Class<? extends Enum<?>>, TrackableType<?>> enumTypes = Maps.newHashMap();
+    // Concurrent: computeIfAbsent from concurrent games corrupts a plain HashMap
+    private static final Map<Class<? extends Enum<?>>, TrackableType<?>> enumTypes = new java.util.concurrent.ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")
     public static <E extends Enum<E>> TrackableType<E> EnumType(final Class<E> enumType) {

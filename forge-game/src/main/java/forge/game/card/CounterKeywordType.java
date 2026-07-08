@@ -6,7 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
+import java.util.concurrent.ConcurrentHashMap;
 
 import forge.game.keyword.Keyword;
 import forge.game.keyword.KeywordView;
@@ -17,13 +17,12 @@ public record CounterKeywordType(KeywordView keyword) implements CounterType {
     static ImmutableList<String> keywordCounter = ImmutableList.of(
             "Flying", "First Strike", "Double Strike", "Deathtouch", "Decayed", "Exalted", "Haste", "Hexproof",
             "Indestructible", "Lifelink", "Menace", "Reach", "Shadow", "Trample", "Vigilance");
-    private static Map<String, CounterKeywordType> sMap = Maps.newHashMap();
+    // Concurrent: lazily populated from game threads; a plain HashMap corrupts
+    // under concurrent put (concurrent games in one JVM).
+    private static final Map<String, CounterKeywordType> sMap = new ConcurrentHashMap<>();
 
     public static CounterKeywordType get(String s) {
-        if (!sMap.containsKey(s)) {
-            sMap.put(s, new CounterKeywordType(Keyword.getInstance(s).getView()));
-        }
-        return sMap.get(s);
+        return sMap.computeIfAbsent(s, k -> new CounterKeywordType(Keyword.getInstance(k).getView()));
     }
 
     public static Set<CounterType> getValues() {
