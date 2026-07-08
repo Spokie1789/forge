@@ -44,9 +44,6 @@ public class ChangeZoneAi extends SpellAbilityAi {
      * too much: blink/bounce/exile/tutor/Raise Dead/Surgical Extraction/......
      */
 
-    // multipleCardsToChoose is used by Intuition and can be adapted to be used by other
-    // cards where multiple cards are fetched at once and they need to be coordinated
-    private static CardCollection multipleCardsToChoose = new CardCollection();
 
     protected boolean willPayCosts(Player payer, SpellAbility sa, Cost cost, Card source) {
         if (sa.isHidden()) {
@@ -136,7 +133,7 @@ public class ChangeZoneAi extends SpellAbilityAi {
 
     @Override
     protected AiAbilityDecision checkApiLogic(Player aiPlayer, SpellAbility sa) {
-        multipleCardsToChoose.clear();
+        AiCardMemory.clearMemorySet(aiPlayer, AiCardMemory.MemorySet.INTUITION_CHOICES);
         String aiLogic = sa.getParam("AILogic");
         if (aiLogic != null) {
             if (aiLogic.equals("Always")) {
@@ -156,7 +153,12 @@ public class ChangeZoneAi extends SpellAbilityAi {
             } else if (aiLogic.equals("Intuition")) {
                 // This logic only fills the multiple cards array, the decision to play is made
                 // separately in hiddenOriginCanPlayAI later.
-                multipleCardsToChoose = SpecialCardAi.Intuition.considerMultiple(aiPlayer, sa);
+                // Intuition preselects multiple cards at once; stash them in the
+                // per-player AI memory (a static field here is shared across all
+                // games in the JVM and corrupts under concurrent games).
+                for (Card intuitionPick : SpecialCardAi.Intuition.considerMultiple(aiPlayer, sa)) {
+                    AiCardMemory.rememberCard(aiPlayer, intuitionPick, AiCardMemory.MemorySet.INTUITION_CHOICES);
+                }
             } else if (aiLogic.equals("MazesEnd")) {
                 return SpecialCardAi.MazesEnd.consider(aiPlayer, sa);
             } else if (aiLogic.equals("Pongify")) {
@@ -1506,9 +1508,11 @@ public class ChangeZoneAi extends SpellAbilityAi {
             } else if ("MazesEnd".equals(logic)) {
                 return SpecialCardAi.MazesEnd.considerCardToGet(decider, sa);
             } else if ("Intuition".equals(logic)) {
-                if (!multipleCardsToChoose.isEmpty()) {
-                    Card choice = multipleCardsToChoose.get(0);
-                    multipleCardsToChoose.remove(0);
+                Set<Card> intuitionChoices = AiCardMemory.getMemorySet(decider, AiCardMemory.MemorySet.INTUITION_CHOICES);
+                if (intuitionChoices != null && !intuitionChoices.isEmpty()) {
+                    // Order is not significant: the picks were chosen as one set.
+                    Card choice = Iterables.getFirst(intuitionChoices, null);
+                    AiCardMemory.forgetCard(decider, choice, AiCardMemory.MemorySet.INTUITION_CHOICES);
                     return choice;
                 }
             } else if (logic.startsWith("ExilePreference")) {
