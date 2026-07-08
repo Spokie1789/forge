@@ -17,6 +17,7 @@
  */
 package forge.game.staticability;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -51,8 +52,9 @@ import forge.util.*;
  * The Class StaticAbility.
  */
 public class StaticAbility extends CardTraitBase implements IIdentifiable, Cloneable, Comparable<StaticAbility> {
-    private static int maxId = 0;
-    private static int nextId() { return ++maxId; }
+    // AtomicInteger: concurrent games in one JVM must not tear or duplicate ids
+    private static final AtomicInteger maxId = new AtomicInteger();
+    private static int nextId() { return maxId.incrementAndGet(); }
 
     private int id;
 

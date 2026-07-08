@@ -17,6 +17,7 @@
  */
 package forge.game.trigger;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -52,8 +53,9 @@ import java.util.*;
  * @version $Id$
  */
 public abstract class Trigger extends TriggerReplacementBase {
-    private static int maxId = 0;
-    private static int nextId() { return ++maxId; }
+    // AtomicInteger: concurrent games in one JVM must not tear or duplicate ids
+    private static final AtomicInteger maxId = new AtomicInteger();
+    private static int nextId() { return maxId.incrementAndGet(); }
 
     /**
      * <p>
@@ -61,7 +63,7 @@ public abstract class Trigger extends TriggerReplacementBase {
      * </p>
      */
     public static void resetIDs() {
-        Trigger.maxId = 50000;
+        Trigger.maxId.set(50000);
     }
 
     /** The ID. */

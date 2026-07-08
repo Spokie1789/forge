@@ -17,6 +17,7 @@
  */
 package forge.game;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
@@ -64,8 +65,9 @@ public class Game {
 
     private static final TaggedLogger netLog = Logger.tag("NETWORK");
 
-    private static int maxId = 0;
-    private static int nextId() { return ++maxId; }
+    // AtomicInteger: concurrent games in one JVM must not tear or duplicate ids
+    private static final AtomicInteger maxId = new AtomicInteger();
+    private static int nextId() { return maxId.incrementAndGet(); }
 
     /** The ID. */
     private int id;
