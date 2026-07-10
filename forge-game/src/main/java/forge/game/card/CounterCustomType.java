@@ -4,16 +4,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.LinkedHashSet;
 
-import com.google.common.collect.Maps;
+import java.util.concurrent.ConcurrentHashMap;
 
 public record CounterCustomType(String keyword) implements CounterType {
-    private static Map<String, CounterCustomType> sMap = Maps.newHashMap();
+    // Concurrent: lazily populated from game threads; a plain HashMap corrupts
+    // under concurrent put (concurrent games in one JVM).
+    private static final Map<String, CounterCustomType> sMap = new ConcurrentHashMap<>();
 
     public static CounterCustomType get(String s) {
-        if (!sMap.containsKey(s)) {
-            sMap.put(s, new CounterCustomType(s));
-        }
-        return sMap.get(s);
+        return sMap.computeIfAbsent(s, CounterCustomType::new);
     }
 
     public static Set<CounterType> getValues() {

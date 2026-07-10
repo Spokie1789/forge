@@ -30,8 +30,15 @@ import java.util.Random;
  * @version $Id$
  */
 public class MyRandom {
-    /** Constant <code>random</code>. */
-    private static Random random = new SecureRandom();
+    /**
+     * Per-thread RNG. A single shared instance is unsafe once multiple games
+     * run concurrently in one JVM: {@link #setRandom(Random)} (used by
+     * simulation code to install a seeded RNG and later restore the original)
+     * would swap the RNG out from under every other running game, and a shared
+     * {@link SecureRandom} serializes all draws behind one lock. Thread-local
+     * keeps setRandom's swap/restore confined to the calling thread.
+     */
+    private static final ThreadLocal<Random> random = ThreadLocal.withInitial(SecureRandom::new);
 
     /**
      * <p>
@@ -52,22 +59,23 @@ public class MyRandom {
      * @return the random
      */
     public static Random getRandom() {
-        return MyRandom.random;
+        return MyRandom.random.get();
     }
 
     /**
-     * Sets the random provider. Used for deterministic simulation.
+     * Sets the random provider for the CURRENT THREAD only. Used for
+     * deterministic simulation; other threads' RNGs are unaffected.
      * @param random the random
      */
     public static void setRandom(Random random) {
-        MyRandom.random = random;
+        MyRandom.random.set(random);
     }
 
     public static int[] splitIntoRandomGroups(final int value, final int numGroups) {
         int[] groups = new int[numGroups];
 
         for (int i = 0; i < value; i++) {
-            groups[random.nextInt(numGroups)]++;
+            groups[getRandom().nextInt(numGroups)]++;
         }
 
         return groups;

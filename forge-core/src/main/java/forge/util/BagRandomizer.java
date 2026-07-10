@@ -12,7 +12,9 @@ import java.util.Random;
  * @param <T> an object
  */
 public class BagRandomizer<T > implements Iterable<T>{
-    private static Random random = new SecureRandom();
+    // Per-instance: a shared static RNG serializes draws across threads once
+    // games run concurrently, for no benefit.
+    private final Random random = new SecureRandom();
 
     private T[] bag;
     private int currentPosition = 0;
