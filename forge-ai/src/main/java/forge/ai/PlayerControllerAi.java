@@ -771,7 +771,15 @@ public class PlayerControllerAi extends PlayerController {
 
     @Override
     public boolean mulliganKeepHand(Player firstPlayer, int cardsToReturn)  {
-        return !ComputerUtil.wantMulligan(player, cardsToReturn);
+        // Optional external policy (AiHooks); null = no oracle, or it failed => heuristic.
+        final CardCollectionView hand = player.getCardsIn(ZoneType.Hand);
+        final Boolean oracle = AiHooks.applyMulliganOracle(player, hand, cardsToReturn);
+        final boolean keep = oracle != null
+            ? oracle
+            : !ComputerUtil.wantMulligan(player, cardsToReturn);
+        AiHooks.notifyMulligan(player, hand, cardsToReturn, keep,
+            oracle != null ? "model" : "heuristic");
+        return keep;
     }
 
     @Override

@@ -1589,6 +1589,14 @@ public class AiController {
             Sentry.captureMessage(ex.getMessage() + "\nAssertionError [verifyTransitivity]: " + assertex);
         }
 
+        // Optional external policy (AiHooks): re-order the candidate list the AI is
+        // about to walk. Deliberately runs on THIS thread, not inside the "Game AI Eval"
+        // future below -- that thread is bounded by a timeout enforced with Thread.stop(),
+        // which must never fire inside external code. The loop below still applies every
+        // legality/affordability check, so a ranker can only change WHICH legal play is
+        // preferred, never make an illegal one. No ranker registered => no-op.
+        boolean ranked = AiHooks.applySpellRanker(player, all);
+
         // in case of infinite loop reset below would not be reached
         timeoutReached = false;
 
@@ -1679,7 +1687,9 @@ public class AiController {
         Thread t = new Thread(future, "Game AI Eval");
         t.start();
         try {
-            return future.get(game.getAITimeout(), TimeUnit.SECONDS);
+            SpellAbility chosen = future.get(game.getAITimeout(), TimeUnit.SECONDS);
+            AiHooks.notifySpellChoice(player, all, chosen, ranked ? "model" : "heuristic");
+            return chosen;
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             e.printStackTrace();
             if (e instanceof TimeoutException) {
@@ -1711,6 +1721,7 @@ public class AiController {
                 }
             }
             // TODO mark some as skipped to increase chance to find something playable next priority
+            AiHooks.notifySpellChoice(player, all, null, "timeout");
             return null;
         }
     }
