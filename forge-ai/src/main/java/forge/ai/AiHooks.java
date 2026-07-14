@@ -64,6 +64,26 @@ public final class AiHooks {
 
         void onMulligan(Player player, CardCollectionView hand, int cardsToReturn,
                         boolean keep, String source);
+
+        /**
+         * Watches the SIMULATION AI's spell choices ({@link forge.ai.simulation.SpellAbilityPicker}),
+         * which never reach {@code chooseSpellAbilityToPlayFromList} and are therefore
+         * invisible to {@link #onSpellChoice}. Fired once per real top-level decision —
+         * never for the picker's recursive lookahead or hypothetical-phase evaluations.
+         *
+         * @param scores    per-candidate searcher scores (index-aligned with
+         *                  {@code candidates}); null for a plan-followup decision,
+         *                  where the searcher executes a step of an already-formulated
+         *                  plan without re-evaluating
+         * @param origScore the searcher's score for the current state (acting is only
+         *                  worthwhile above this baseline)
+         * @param chosen    the chosen ability — always a member of {@code candidates} —
+         *                  or null when the searcher deliberately passes
+         * @param source    "sim" (fresh evaluation) or "sim_plan" (plan followup)
+         */
+        default void onSimChoice(Player player, List<SpellAbility> candidates, int[] scores,
+                                 int origScore, SpellAbility chosen, String source) {
+        }
     }
 
     private static volatile SpellRanker spellRanker;
@@ -75,6 +95,7 @@ public final class AiHooks {
     private static final AtomicLong mulliganCalls = new AtomicLong();
     private static final AtomicLong mulliganFallbacks = new AtomicLong();
     private static final AtomicLong observerErrors = new AtomicLong();
+    private static final AtomicLong simChoiceCalls = new AtomicLong();
 
     private AiHooks() {
     }
@@ -99,6 +120,11 @@ public final class AiHooks {
 
     public static boolean hasMulliganOracle() {
         return mulliganOracle != null;
+    }
+
+    /** Cheap guard so callers can skip capture work when nobody is listening. */
+    public static boolean hasDecisionObserver() {
+        return observer != null;
     }
 
     // ── Invocation (called by the AI; always safe) ─────────────────────────
@@ -166,6 +192,21 @@ public final class AiHooks {
         }
     }
 
+    public static void notifySimChoice(Player player, List<SpellAbility> candidates,
+                                       int[] scores, int origScore, SpellAbility chosen,
+                                       String source) {
+        final DecisionObserver obs = observer;
+        if (obs == null) {
+            return;
+        }
+        simChoiceCalls.incrementAndGet();
+        try {
+            obs.onSimChoice(player, candidates, scores, origScore, chosen, source);
+        } catch (Throwable t) {
+            warnOnce(observerErrors, "decision observer (sim)", t);
+        }
+    }
+
     public static void notifyMulligan(Player player, CardCollectionView hand,
                                       int cardsToReturn, boolean keep, String source) {
         final DecisionObserver obs = observer;
@@ -189,6 +230,7 @@ public final class AiHooks {
         out.put("mulligan_calls", mulliganCalls.get());
         out.put("mulligan_fallbacks", mulliganFallbacks.get());
         out.put("observer_errors", observerErrors.get());
+        out.put("sim_choice_calls", simChoiceCalls.get());
         return out;
     }
 
@@ -198,6 +240,7 @@ public final class AiHooks {
         mulliganCalls.set(0);
         mulliganFallbacks.set(0);
         observerErrors.set(0);
+        simChoiceCalls.set(0);
     }
 
     /** Loud on the first failure of each kind; silent (but counted) afterwards. */

@@ -30,6 +30,14 @@ public class SpellAbilityPicker {
 
     private Plan plan;
     private int numSimulations;
+    /**
+     * Per-candidate scores from the last top-level, current-phase evaluation —
+     * captured only for {@link AiHooks#notifySimChoice} (teacher-data logging) and only
+     * when an observer is registered. Index-aligned with the candidate list the caller
+     * passed to {@link #createNewPlan}. Never filled by recursive lookahead or by the
+     * hypothetical after-blockers evaluation.
+     */
+    private int[] hookScores;
 
     public SpellAbilityPicker(Game game, Player player) {
         this.game = game;
@@ -92,22 +100,31 @@ public class SpellAbilityPicker {
         List<SpellAbility> candidateSAs = getCandidateSpellsAndAbilities();
         if (controller != null) {
             // This is a recursion during a higher-level simulation. Just return the head of the best
-            // sequence directly, no need to create a Plan object.
-            return chooseSpellAbilityToPlayImpl(controller, candidateSAs, origGameScore, null);
+            // sequence directly, no need to create a Plan object. Hypothetical — never
+            // notified to AiHooks.
+            return chooseSpellAbilityToPlayImpl(controller, candidateSAs, origGameScore, null, false);
         }
 
         printPhaseInfo();
         SpellAbility sa = getPlannedSpellAbility(origGameScore, candidateSAs);
         if (sa != null) {
+            // Executing a step of an already-formulated plan: a real decision, but the
+            // candidates were not re-evaluated this call, so there are no fresh scores.
+            AiHooks.notifySimChoice(player, candidateSAs, null, origGameScore.value, sa, "sim_plan");
             return sa;
         }
+        hookScores = null;
         createNewPlan(origGameScore, candidateSAs);
-        return getPlannedSpellAbility(origGameScore, candidateSAs);
+        sa = getPlannedSpellAbility(origGameScore, candidateSAs);
+        // The one real top-level decision this priority: chosen is a member of
+        // candidateSAs (or null = deliberate pass); hookScores align with candidateSAs.
+        AiHooks.notifySimChoice(player, candidateSAs, hookScores, origGameScore.value, sa, "sim");
+        return sa;
     }
 
-    private Plan formulatePlanWithPhase(Score origGameScore, List<SpellAbility> candidateSAs, PhaseType phase) {
+    private Plan formulatePlanWithPhase(Score origGameScore, List<SpellAbility> candidateSAs, PhaseType phase, boolean captureForHook) {
         SimulationController controller = new SimulationController(origGameScore);
-        SpellAbility sa = chooseSpellAbilityToPlayImpl(controller, candidateSAs, origGameScore, phase);
+        SpellAbility sa = chooseSpellAbilityToPlayImpl(controller, candidateSAs, origGameScore, phase, captureForHook);
         if (sa != null) {
             return controller.getBestPlan();
         }
@@ -128,7 +145,9 @@ public class SpellAbilityPicker {
     private void createNewPlan(Score origGameScore, List<SpellAbility> candidateSAs) {
         plan = null;
 
-        Plan bestPlan = formulatePlanWithPhase(origGameScore, candidateSAs, null);
+        // captureForHook: this is THE evaluation of the current decision point — its
+        // per-candidate scores are the teacher signal notifySimChoice reports.
+        Plan bestPlan = formulatePlanWithPhase(origGameScore, candidateSAs, null, true);
         if (bestPlan == null) {
             print("No good plan at this time");
             return;
@@ -149,7 +168,9 @@ public class SpellAbilityPicker {
                 if (printOutput) {
                     System.err.println("Formula plan with phase bloom");
                 }
-                Plan afterBlockersPlan = formulatePlanWithPhase(origGameScore, candidateSAs2, PhaseType.COMBAT_DECLARE_BLOCKERS);
+                // Hypothetical future-phase evaluation — must not overwrite the
+                // current-phase hookScores.
+                Plan afterBlockersPlan = formulatePlanWithPhase(origGameScore, candidateSAs2, PhaseType.COMBAT_DECLARE_BLOCKERS, false);
                 if (afterBlockersPlan != null && afterBlockersPlan.getFinalScore().value >= bestPlan.getFinalScore().value) {
                     printPlan(afterBlockersPlan, "After blockers");
                     print("Deciding to wait until after declare blockers.");
@@ -162,18 +183,26 @@ public class SpellAbilityPicker {
         plan = bestPlan;
     }
 
-    private SpellAbility chooseSpellAbilityToPlayImpl(SimulationController controller, List<SpellAbility> candidateSAs, Score origGameScore, PhaseType phase) {
+    private SpellAbility chooseSpellAbilityToPlayImpl(SimulationController controller, List<SpellAbility> candidateSAs, Score origGameScore, PhaseType phase, boolean captureForHook) {
         long startTime = System.currentTimeMillis();
 
+        int[] capturedScores = captureForHook && AiHooks.hasDecisionObserver()
+                ? new int[candidateSAs.size()] : null;
         SpellAbility bestSa = null;
         Score bestSaValue = origGameScore;
         print("Evaluating... (orig score = " + origGameScore +  ")");
         for (int i = 0; i < candidateSAs.size(); i++) {
             Score value = evaluateSa(controller, phase, candidateSAs, i);
+            if (capturedScores != null) {
+                capturedScores[i] = value.value;
+            }
             if (value.value > bestSaValue.value) {
                 bestSaValue = value;
                 bestSa = candidateSAs.get(i);
             }
+        }
+        if (capturedScores != null) {
+            hookScores = capturedScores;
         }
 
         // To make the AI hold-off on playing creatures in MAIN1 if they give no other benefits,
