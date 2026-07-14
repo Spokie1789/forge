@@ -36,9 +36,9 @@ public class GameSimulator {
         eval = new GameStateEvaluator();
 
         origLines = new ArrayList<>();
-        debugLines = origLines;
+        setDebugLines(origLines);
 
-        debugPrint = false;
+        setDebugPrint(false);
         origScore = eval.getScoreForGameState(origGame, origAiPlayer);
 
         if (advanceToPhase == null) {
@@ -50,26 +50,26 @@ public class GameSimulator {
         // want to compare to the eval score after simulating.
         if (COPY_STACK && !origGame.getStackZone().isEmpty()) {
             origLines = new ArrayList<>();
-            debugLines = origLines;
+            setDebugLines(origLines);
             Game copyOrigGame = copier.makeCopy();
             Player copyOrigAiPlayer = copyOrigGame.getPlayers().get(1);
             resolveStack(copyOrigGame, copyOrigGame.getPlayers().get(0));
             origScore = eval.getScoreForGameState(copyOrigGame, copyOrigAiPlayer);
         }
 
-        debugPrint = false;
-        debugLines = null;
+        setDebugPrint(false);
+        setDebugLines(null);
     }
 
     private void ensureGameCopyScoreMatches(Game origGame, Player origAiPlayer) {
         eval.setDebugging(true);
         List<String> simLines = new ArrayList<>();
-        debugLines = simLines;
+        setDebugLines(simLines);
         Score simScore = eval.getScoreForGameState(simGame, aiPlayer);
         if (!simScore.equals(origScore)) {
             // Re-eval orig with debug printing.
             origLines = new ArrayList<>();
-            debugLines = origLines;
+            setDebugLines(origLines);
             eval.getScoreForGameState(origGame, origAiPlayer);
             // Print debug info.
             printDiff(origLines, simLines);
@@ -112,14 +112,42 @@ public class GameSimulator {
         }
     }
 
-    public static boolean debugPrint;
-    public static List<String> debugLines;
+    // Per-thread debug state.
+    //
+    // These were plain mutable statics, written by every GameSimulator construction and
+    // appended to by every evaluation. Single-threaded that is harmless. With more than
+    // one simulation game in a JVM it is fatal: the threads race on the flag, and they
+    // all append to ONE shared ArrayList that no thread ever owns -- so it is corrupted
+    // concurrently and it grows without bound, which presents as an OutOfMemoryError
+    // rather than as anything that points at debug code. (Observed: 4-6 concurrent
+    // simulation games killed a 16GB heap; the same games run fine one at a time.)
+    //
+    // Debug output is inherently per-thread anyway: it describes ONE simulation's
+    // decision. ThreadLocal is therefore not a workaround, it is the correct scope --
+    // and it is the same fix as the fork's MyRandom / static-counter branches.
+    private static final ThreadLocal<Boolean> DEBUG_PRINT =
+        ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static final ThreadLocal<List<String>> DEBUG_LINES = new ThreadLocal<>();
+
+    private static boolean isDebugPrint() {
+        return DEBUG_PRINT.get();
+    }
+
+    private static void setDebugPrint(boolean value) {
+        DEBUG_PRINT.set(value);
+    }
+
+    private static void setDebugLines(List<String> lines) {
+        DEBUG_LINES.set(lines);
+    }
+
     public static void debugPrint(String str) {
-        if (debugPrint) {
+        if (DEBUG_PRINT.get()) {
             System.out.println(str);
         }
-        if (debugLines != null) {
-            debugLines.add(str);
+        final List<String> lines = DEBUG_LINES.get();
+        if (lines != null) {
+            lines.add(str);
         }
     }
 
@@ -203,7 +231,7 @@ public class GameSimulator {
                 saOrSubSa = saOrSubSa.getSubAbility();
             } while (saOrSubSa != null);
 
-            if (debugPrint && !sa.getAllTargetChoices().isEmpty()) {
+            if (isDebugPrint() && !sa.getAllTargetChoices().isEmpty()) {
                 debugPrint("Targets: ");
                 for (TargetChoices target : sa.getAllTargetChoices()) {
                     System.out.print(target);
@@ -234,16 +262,16 @@ public class GameSimulator {
         // we should simulate how combat will resolve and evaluate that
         // state instead!
         List<String> simLines = null;
-        if (debugPrint) {
+        if (isDebugPrint()) {
             debugPrint("SimGame:");
             simLines = new ArrayList<>();
-            debugLines = simLines;
-            debugPrint = false;
+            setDebugLines(simLines);
+            setDebugPrint(false);
         }
         Score score = eval.getScoreForGameState(simGame, aiPlayer);
         if (simLines != null) {
-            debugLines = null;
-            debugPrint = true;
+            setDebugLines(null);
+            setDebugPrint(true);
             printDiff(origLines, simLines);
         }
         controller.possiblyCacheResult(score, origSa);
