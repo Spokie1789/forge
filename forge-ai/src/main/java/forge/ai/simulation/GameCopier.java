@@ -298,7 +298,13 @@ public class GameCopier {
                 newCard = new Card(newGame.nextCardId(), hidden_info_card, newGame);
                 newCard.setOwner(newOwner);
             } else {
-                newCard = Card.fromPaperCard(c.getPaperCard(), newOwner);
+                // Template cache: parse the paper script once per JVM, then stamp
+                // copies by state deep-copy (~the "vast majority" cost in the TODO
+                // below). Falls back to the full parse per card on any failure.
+                newCard = SimCardTemplates.copyFor(c, newOwner, newGame);
+                if (newCard == null) {
+                    newCard = Card.fromPaperCard(c.getPaperCard(), newOwner);
+                }
             }
             newCard.setCommander(c.isCommander());
             return newCard;
