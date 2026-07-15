@@ -93,7 +93,12 @@ public final class SimCardTemplates {
             }
             Card template = CACHE.computeIfAbsent(pc, SimCardTemplates::buildTemplate);
             Card out = instantiate(template, pc, newOwner, newGame);
-            COPIES.incrementAndGet();
+            long n = COPIES.incrementAndGet();
+            if (n == 1L || n % 100_000L == 0L) {
+                // loud-activity contract: a run that never prints this line is NOT
+                // using the fast path, whatever its env claims
+                System.out.println("SimCardTemplates: " + stats());
+            }
             return out;
         } catch (Throwable t) {
             BROKEN.add(pc);
