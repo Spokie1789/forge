@@ -1576,6 +1576,68 @@ public class AiController {
         return chosenSa;
     }
 
+    /**
+     * Rank the candidate list, but show the ranker the shape the SIMULATION AI sees.
+     *
+     * <p>A play-ranker distilled from the searcher measured a dead null in two
+     * independent 2,000-game gates (2026-07-23, z=-0.29 and z=-0.30) despite fitting its
+     * teacher well (top-1 agreement 0.694 against a 0.433 heuristic baseline). An offline
+     * audit of the two decision populations found the reason: the searcher decides among
+     * a mean of 3.29 candidates and this hook hands the model a mean of 10.46. A third of
+     * the teacher's decisions are two-way choices; none of this hook's are. The student
+     * was trained to pick from a short vetted list and deployed on a long raw one -- a
+     * different task, not a harder one.
+     *
+     * <p>The difference is {@link forge.ai.simulation.SpellAbilityPicker#getCandidateSpellsAndAbilities()},
+     * which prunes with three cheap non-simulation filters before the searcher ever
+     * chooses: {@code ComputerUtilCard.dedupeCards} (four copies of a card in hand are
+     * interchangeable and collapse to one), drop mana abilities, and keep only what
+     * {@code canPlayAndPayFor} calls WillPlay.
+     *
+     * <p>This applies the two FREE ones. The playability filter is deliberately NOT
+     * applied here: {@code canPlayAndPayFor} is the heaviest check in the AI, it sets up
+     * targets and defines X as a side effect, and the loop below runs it lazily inside a
+     * timeout-bounded thread -- hoisting it onto this thread would cost a multiple of the
+     * calls and move the heavy work outside the timeout that exists to bound it.
+     *
+     * <p>Nothing is discarded. The list is PARTITIONED and reassembled, so the loop below
+     * still reaches every candidate in exactly the same way; only the order changes, and
+     * only when a ranker is registered. With no ranker this is a no-op, so the heuristic
+     * -- and therefore every control arm -- is bit-identical to before.
+     *
+     * @return true if the ranker reordered its partition, false if the heuristic order stands
+     */
+    private boolean rankAsTheSearcherWouldSee(final List<SpellAbility> all) {
+        if (!AiHooks.hasSpellRanker() || all.size() < 2) {
+            return false;
+        }
+        final List<SpellAbility> rankable = new ArrayList<>(all.size());
+        final List<SpellAbility> deferred = new ArrayList<>();
+        // Mirrors dedupeCards: hand only (two battlefield permanents sharing a name are
+        // NOT interchangeable -- different damage, auras, tap state) and never perpetual.
+        final Map<String, Card> firstOfNameInHand = new HashMap<>();
+        for (final SpellAbility sa : all) {
+            final Card host = sa.getHostCard();
+            boolean defer = sa.isManaAbility();
+            if (!defer && host != null && host.isInZone(ZoneType.Hand) && !host.hasPerpetual()) {
+                final Card first = firstOfNameInHand.putIfAbsent(host.getName(), host);
+                defer = first != null && first != host;
+            }
+            (defer ? deferred : rankable).add(sa);
+        }
+        if (deferred.isEmpty()) {
+            return AiHooks.applySpellRanker(player, all);
+        }
+        if (rankable.size() < 2) {
+            return false;  // nothing left to order; leave the heuristic's list untouched
+        }
+        final boolean ranked = AiHooks.applySpellRanker(player, rankable);
+        all.clear();
+        all.addAll(rankable);
+        all.addAll(deferred);
+        return ranked;
+    }
+
     private SpellAbility chooseSpellAbilityToPlayFromList(final List<SpellAbility> all, boolean skipCounter) {
         if (all == null || all.isEmpty())
             return null;
@@ -1595,7 +1657,7 @@ public class AiController {
         // which must never fire inside external code. The loop below still applies every
         // legality/affordability check, so a ranker can only change WHICH legal play is
         // preferred, never make an illegal one. No ranker registered => no-op.
-        boolean ranked = AiHooks.applySpellRanker(player, all);
+        boolean ranked = rankAsTheSearcherWouldSee(all);
 
         // in case of infinite loop reset below would not be reached
         timeoutReached = false;
