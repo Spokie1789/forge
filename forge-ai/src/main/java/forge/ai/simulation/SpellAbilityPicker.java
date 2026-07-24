@@ -413,6 +413,7 @@ public class SpellAbilityPicker {
                     return null;
                 }
             }
+            SimChannelStats.recordPlanDecision(SimChannelStats.Channel.MODES);
             return plannedModes;
         }
         return null;
@@ -442,6 +443,7 @@ public class SpellAbilityPicker {
             Card card = getPlannedChoice(fetchList);
             if (card != null) {
                 plan.advanceNextChoice();
+                SimChannelStats.recordPlanDecision(SimChannelStats.Channel.FETCH);
                 return card;
             }
         }
@@ -464,6 +466,7 @@ public class SpellAbilityPicker {
                 Card card = getPlannedChoice(cardList);
                 if (card != null) {
                     plan.advanceNextChoice();
+                    SimChannelStats.recordPlanDecision(SimChannelStats.Channel.SACRIFICE);
                     return new CardCollection(card);
                 }
             }

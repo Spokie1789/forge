@@ -24,6 +24,7 @@ import forge.ai.AiCardMemory.MemorySet;
 import forge.ai.ability.ChangeZoneAi;
 import forge.ai.ability.LearnAi;
 import forge.ai.simulation.GameStateEvaluator;
+import forge.ai.simulation.SimChannelStats;
 import forge.ai.simulation.SpellAbilityPicker;
 import forge.card.CardStateName;
 import forge.card.CardType;
@@ -2281,7 +2282,9 @@ public class AiController {
 
     public Card chooseCardToHiddenOriginChangeZone(ZoneType destination, List<ZoneType> origin, SpellAbility sa,
                                                    CardCollection fetchList, Player player2, Player decider) {
-        if (useSimulation) {
+        final boolean simBranch = useSimulation && !SimChannelStats.ablated(SimChannelStats.Channel.FETCH);
+        SimChannelStats.recordCall(SimChannelStats.Channel.FETCH, simBranch);
+        if (simBranch) {
             return simPicker.chooseCardToHiddenOriginChangeZone(destination, origin, sa, fetchList, player2, decider);
         }
 
@@ -2364,14 +2367,18 @@ public class AiController {
     }
 
     public List<AbilitySub> chooseModeForAbility(SpellAbility sa, List<AbilitySub> possible, int min, int num, boolean allowRepeat) {
-        if (simPicker != null) {
+        final boolean simBranch = simPicker != null && !SimChannelStats.ablated(SimChannelStats.Channel.MODES);
+        SimChannelStats.recordCall(SimChannelStats.Channel.MODES, simBranch);
+        if (simBranch) {
             return simPicker.chooseModeForAbility(sa, possible, min, num, allowRepeat);
         }
         return null;
     }
 
     public CardCollectionView chooseSacrificeType(String type, SpellAbility ability, boolean effect, int amount, final CardCollectionView exclude) {
-        if (simPicker != null) {
+        final boolean simBranch = simPicker != null && !SimChannelStats.ablated(SimChannelStats.Channel.SACRIFICE);
+        SimChannelStats.recordCall(SimChannelStats.Channel.SACRIFICE, simBranch);
+        if (simBranch) {
             return simPicker.chooseSacrificeType(type, ability, effect, amount, exclude);
         }
         return ComputerUtil.chooseSacrificeType(player, type, ability, ability.getTargetCard(), effect, amount, exclude);
