@@ -52,8 +52,15 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class SimChannelStats {
 
-    /** The three non-spell-choice channels the searcher can decide. */
+    /**
+     * The channels the searcher can decide. {@link #SPELL_CHOICE} is the one the experiment
+     * KEEPS; it is counted, never ablated. It fires on every priority, so it doubles as proof
+     * that the searcher was engaged at all — without it an all-zero snapshot cannot tell
+     * "these channels never fire" apart from "useSimulation was never on", and those two
+     * readings point in opposite directions.
+     */
     public enum Channel {
+        SPELL_CHOICE("spell_choice"),
         MODES("modes"),
         SACRIFICE("sacrifice"),
         FETCH("fetch");
@@ -96,8 +103,17 @@ public final class SimChannelStats {
                 continue;
             }
             if ("all".equals(token)) {
-                Arrays.fill(ABLATED, true);
+                // "all" means all ABLATABLE channels. Ablating spell choice would simply turn
+                // the searcher off, which is the control arm, not this experiment.
+                for (final Channel channel : Channel.values()) {
+                    ABLATED[channel.ordinal()] = channel != Channel.SPELL_CHOICE;
+                }
                 continue;
+            }
+            if (Channel.SPELL_CHOICE.key.equals(token)) {
+                throw new IllegalStateException("FORGE_SIM_ABLATE_CHANNELS: spell_choice is not"
+                        + " ablatable -- a searcher without spell choice is just the heuristic"
+                        + " control arm, which is measured separately");
             }
             boolean matched = false;
             for (final Channel channel : Channel.values()) {
