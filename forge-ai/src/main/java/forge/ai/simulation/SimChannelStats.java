@@ -92,7 +92,15 @@ public final class SimChannelStats {
      * run is interesting. At most one small rewrite every {@link #FLUSH_INTERVAL_NANOS}.
      */
     private static final long FLUSH_INTERVAL_NANOS = 2_000_000_000L;
-    private static final AtomicLong LAST_FLUSH_NANOS = new AtomicLong(Long.MIN_VALUE);
+    /**
+     * Seeded one interval in the past so the first recorded call flushes immediately. It must
+     * NOT be seeded to {@link Long#MIN_VALUE}: {@code System.nanoTime() - Long.MIN_VALUE}
+     * overflows to a negative value, the interval test never passes, and the counters silently
+     * stop persisting after the boot snapshot -- which reads exactly like a channel that never
+     * fires.
+     */
+    private static final AtomicLong LAST_FLUSH_NANOS =
+            new AtomicLong(System.nanoTime() - FLUSH_INTERVAL_NANOS);
 
     static {
         final String spec = System.getenv()
