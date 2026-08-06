@@ -1339,6 +1339,15 @@ public class PlayerControllerAi extends PlayerController {
             sa.setTargetingPlayer(targetingPlayer);
             return targetingPlayer.getController().chooseTargetsFor(sa);
         }
+        // A subclass driving this AI from a recorded game gets first refusal on
+        // the target. Without it a triggered ability's target is decided inside
+        // the ability's own AI logic (Snapcaster Mage is `AILogic$ ReplaySpell`,
+        // handled in PumpAi) and no PlayerController method is ever consulted,
+        // so a replay cannot aim it at all. Default is false and the ordinary
+        // AI path below is unchanged.
+        if (replayTriggerTargets(sa)) {
+            return true;
+        }
         return brains.doTrigger(sa, isMandatory);
     }
 
@@ -1362,6 +1371,21 @@ public class PlayerControllerAi extends PlayerController {
             return false; // didn't play spell
         }
         return true;
+    }
+
+    /**
+     * Lets a subclass aim a triggered ability before this AI decides for itself.
+     *
+     * <p>Exists for the cross-engine differential replay in MTG_AI, which needs
+     * to reproduce a recorded game's trigger targets. Those are chosen inside
+     * the individual ability AIs rather than through any {@code PlayerController}
+     * method, so there was no seam to override.
+     *
+     * @return true when the subclass has assigned targets and this AI should
+     *     not; false to keep the ordinary behaviour, which is the default.
+     */
+    protected boolean replayTriggerTargets(SpellAbility sa) {
+        return false;
     }
 
     @Override
