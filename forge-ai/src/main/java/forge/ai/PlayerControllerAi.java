@@ -1388,6 +1388,24 @@ public class PlayerControllerAi extends PlayerController {
         return false;
     }
 
+    /**
+     * Lets a subclass name the permanents a cost sacrifices.
+     *
+     * <p>Exists for the same cross-engine differential replay as
+     * {@link #replayTriggerTargets}, and for the same reason: which permanent a
+     * cost gives up is a real decision, and it is made inside
+     * {@code AiCostDecision} through {@code AiController.chooseSacrificeType},
+     * so no {@code PlayerController} method is ever consulted. An
+     * effect's sacrifice reaches {@code choosePermanentsToSacrifice} and needs
+     * nothing here; a cost's does not.
+     *
+     * @return the permanents to give up, or null to keep the ordinary
+     *     behaviour, which is the default.
+     */
+    public CardCollectionView replaySacrificeCost(String type, SpellAbility ability, int amount) {
+        return null;
+    }
+
     @Override
     public boolean chooseTargetsFor(SpellAbility currentAbility) {
         return brains.doTrigger(currentAbility, true);

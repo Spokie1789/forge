@@ -502,7 +502,14 @@ public class AiCostDecision extends CostDecisionMakerBase {
 
         int c = cost.getAbilityAmount(ability);
 
-        final AiController aic = ((PlayerControllerAi)player.getController()).getAi();
+        final PlayerControllerAi controller = (PlayerControllerAi) player.getController();
+        // A subclass driving this AI from a recorded game gets first refusal.
+        // Default is null and the ordinary AI path below is unchanged.
+        final CardCollectionView replayed = controller.replaySacrificeCost(cost.getType(), ability, c);
+        if (replayed != null) {
+            return PaymentDecision.card(replayed);
+        }
+        final AiController aic = controller.getAi();
         CardCollectionView list = aic.chooseSacrificeType(cost.getType(), ability, isEffect(), c, null);
         return list == null ? null : PaymentDecision.card(list);
     }
