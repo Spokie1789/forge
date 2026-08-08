@@ -1429,6 +1429,31 @@ public class PlayerControllerAi extends PlayerController {
         return null;
     }
 
+    /**
+     * Which cards a DISCARD cost gives up, for a controller replaying a
+     * recorded game.
+     *
+     * <p>The third seam on the same contract as {@link #replaySacrificeCost}
+     * and {@link #replayExileCost}. A discard cost is resolved inside
+     * {@code AiCostDecision} through {@code ComputerUtil.getCardsToDiscard},
+     * which consults the AI's own heuristic and no {@code PlayerController}
+     * method, so a consumer replaying a recorded game cannot say which cards
+     * were given up.
+     *
+     * <p>One card is a decision the recorded action can carry; two are not.
+     * Zombie Infestation's "Discard two cards:" picks its pair inside the
+     * source engine, and the cards land in a graveyard whose ORDER is a game
+     * concept -- delve, flashback, the top card. Two activations put four cards
+     * in, and two engines choosing their own pairs disagreed about the
+     * sequence from then on.
+     *
+     * @return the cards to discard, or null to keep the ordinary behaviour,
+     *     which is the default.
+     */
+    public CardCollectionView replayDiscardCost(String type, SpellAbility ability, int amount) {
+        return null;
+    }
+
     @Override
     public boolean chooseTargetsFor(SpellAbility currentAbility) {
         return brains.doTrigger(currentAbility, true);

@@ -92,6 +92,16 @@ public class AiCostDecision extends CostDecisionMakerBase {
         final String type = cost.getType();
         CardCollectionView hand = player.getCardsIn(ZoneType.Hand);
 
+        // A controller replaying a recorded game names the cards itself.
+        // Checked before every branch below, because the branches pick with
+        // this AI's own heuristics and the recorded game already made the
+        // choice; the default returns null and changes nothing.
+        final CardCollectionView replayedDiscard = ((PlayerControllerAi) player.getController())
+                .replayDiscardCost(type, ability, cost.getAbilityAmount(ability));
+        if (replayedDiscard != null) {
+            return PaymentDecision.card(replayedDiscard);
+        }
+
         if (type.equals("LastDrawn")) {
             if (!hand.contains(player.getLastDrawnCard())) {
                 return null;
