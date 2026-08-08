@@ -217,6 +217,14 @@ public class AiCostDecision extends CostDecisionMakerBase {
 
         int c = cost.getAbilityAmount(ability);
 
+        // A subclass driving this AI from a recorded game gets first refusal.
+        // Default is null and every ordinary AI path below is unchanged.
+        final CardCollectionView replayedExile =
+                ((PlayerControllerAi) player.getController()).replayExileCost(type, ability, c);
+        if (replayedExile != null) {
+            return PaymentDecision.card(replayedExile);
+        }
+
         if (cost.from.size() == 1 && cost.getFrom().get(0).equals(ZoneType.Library)) {
             return PaymentDecision.card(player.getCardsIn(ZoneType.Library, c));
         }

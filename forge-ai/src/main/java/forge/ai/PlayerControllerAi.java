@@ -1406,6 +1406,29 @@ public class PlayerControllerAi extends PlayerController {
         return null;
     }
 
+    /**
+     * Which cards an EXILE cost gives up, for a controller replaying a
+     * recorded game.
+     *
+     * <p>Same seam as {@link #replaySacrificeCost}, and needed for the same
+     * reason: an exile cost is resolved inside {@code AiCostDecision} through
+     * {@code ComputerUtil.chooseExileFrom}, so no {@code PlayerController}
+     * method is consulted and a consumer cannot say which cards to eat.
+     * {@code chooseCardsToDelve} covers delve and nothing else.
+     *
+     * <p>This matters because the choice is free and the zones are compared.
+     * Grim Lavamancer exiles two cards from its controller's graveyard as a
+     * cost; two engines each picking their own two disagree about both
+     * graveyards from that activation onward, with nothing in the log able to
+     * explain it.
+     *
+     * @return the cards to exile, or null to keep the ordinary behaviour,
+     *     which is the default.
+     */
+    public CardCollectionView replayExileCost(String type, SpellAbility ability, int amount) {
+        return null;
+    }
+
     @Override
     public boolean chooseTargetsFor(SpellAbility currentAbility) {
         return brains.doTrigger(currentAbility, true);
